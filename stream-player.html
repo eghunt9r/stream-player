@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>بث مباشر</title>
+<script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: #000;
+    color: #fff;
+    font-family: 'Segoe UI', Tahoma, sans-serif;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  #header {
+    background: linear-gradient(135deg, #1a1a2e, #16213e);
+    padding: 10px 14px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    border-bottom: 2px solid #00c851;
+    flex-shrink: 0;
+  }
+
+  .live-badge {
+    background: #00c851;
+    color: #fff;
+    font-size: 11px;
+    font-weight: 700;
+    padding: 3px 8px;
+    border-radius: 4px;
+    letter-spacing: 1px;
+    animation: pulse 1.5s infinite;
+  }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.6; }
+  }
+
+  #header h1 {
+    font-size: 15px;
+    font-weight: 600;
+    flex: 1;
+  }
+
+  #fullscreen-btn {
+    background: transparent;
+    border: 1px solid #333;
+    color: #aaa;
+    width: 32px; height: 32px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  #player-wrap {
+    flex: 1;
+    background: #000;
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  video {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+  }
+
+  #overlay {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0,0,0,0.8);
+    gap: 16px;
+    transition: opacity 0.3s;
+  }
+
+  #overlay.hidden { opacity: 0; pointer-events: none; }
+
+  .spinner {
+    width: 48px; height: 48px;
+    border: 3px solid rgba(255,255,255,0.1);
+    border-top-color: #00c851;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+  }
+
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  #status-text {
+    font-size: 14px;
+    color: #aaa;
+  }
+
+  #retry-btn {
+    background: #00c851;
+    border: none;
+    color: #fff;
+    font-size: 14px;
+    font-weight: 600;
+    padding: 10px 24px;
+    border-radius: 20px;
+    cursor: pointer;
+    display: none;
+  }
+
+  #error-bar {
+    display: none;
+    background: #1a0000;
+    border-top: 1px solid #c8001a;
+    color: #ff6b6b;
+    font-size: 12px;
+    padding: 8px 14px;
+    text-align: center;
+    flex-shrink: 0;
+  }
+</style>
+</head>
+<body>
+
+<div id="header">
+  <span class="live-badge">LIVE</span>
+  <h1>⚽ بث مباشر</h1>
+  <button id="fullscreen-btn" onclick="toggleFullscreen()">⛶</button>
+</div>
+
+<div id="player-wrap">
+  <video id="video" playsinline></video>
+  <div id="overlay">
+    <div class="spinner"></div>
+    <div id="status-text">جاري تحميل البث...</div>
+    <button id="retry-btn" onclick="init()">🔄 إعادة المحاولة</button>
+  </div>
+</div>
+
+<div id="error-bar"></div>
+
+<script>
+  const tg = window.Telegram?.WebApp;
+  if (tg) { tg.ready(); tg.expand(); }
+
+  const STREAM_URL = 'http://8kkng.life:8080/live/Cliyan30/IVKacV8lzSA8rsB/248164.m3u8';
+
+  const video = document.getElementById('video');
+  const overlay = document.getElementById('overlay');
+  const statusText = document.getElementById('status-text');
+  const retryBtn = document.getElementById('retry-btn');
+  const errorBar = document.getElementById('error-bar');
+  let hls = null;
+
+  function showError(msg) {
+    errorBar.textContent = msg;
+    errorBar.style.display = 'block';
+  }
+
+  function init() {
+    errorBar.style.display = 'none';
+    retryBtn.style.display = 'none';
+    overlay.classList.remove('hidden');
+    statusText.textContent = 'جاري تحميل البث...';
+
+    if (hls) { hls.destroy(); hls = null; }
+
+    if (Hls.isSupported()) {
+      hls = new Hls({ enableWorker: false });
+      hls.loadSource(STREAM_URL);
+      hls.attachMedia(video);
+      hls.on(Hls.Events.MANIFEST_PARSED, () => {
+        video.play().catch(() => {
+          statusText.textContent = 'اضغط للتشغيل';
+          retryBtn.textContent = '▶ تشغيل';
+          retryBtn.style.display = 'block';
+        });
+      });
+      hls.on(Hls.Events.ERROR, (e, data) => {
+        if (data.fatal) {
+          statusText.textContent = 'تعذّر تحميل البث';
+          retryBtn.textContent = '🔄 إعادة المحاولة';
+          retryBtn.style.display = 'block';
+          showError('خطأ في الاتصال بالبث');
+        }
+      });
+    } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+      video.src = STREAM_URL;
+      video.play();
+    } else {
+      showError('المتصفح لا يدعم HLS');
+    }
+  }
+
+  video.addEventListener('playing', () => overlay.classList.add('hidden'));
+  video.addEventListener('waiting', () => {
+    overlay.classList.remove('hidden');
+    statusText.textContent = 'جاري التحميل...';
+    retryBtn.style.display = 'none';
+  });
+
+  function toggleFullscreen() {
+    if (!document.fullscreenElement) {
+      document.documentElement.requestFullscreen?.();
+    } else {
+      document.exitFullscreen?.();
+    }
+  }
+
+  init();
+</script>
+</body>
+</html>
